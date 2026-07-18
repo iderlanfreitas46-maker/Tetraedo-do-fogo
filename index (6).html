@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tetraedro do Fogo — Treinamento de Segurança de Processos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   TETRAEDRO DO FOGO — Design tokens
+   Paleta industrial escura + acentos por elemento:
+     Calor        -> laranja-vermelho  (#ff5a36)
+     Combustível  -> âmbar             (#ffb020)
+     Oxigênio     -> ciano             (#2fb6f0)
+     Reação/Cadeia-> violeta elétrico  (#9b5cff)
+   ========================================================= */
+:root{
+  --bg-0:#070a10;
+  --bg-1:#0e1420;
+  --bg-2:#151d2c;
+  --line:#26324a;
+  --line-soft:#1c2536;
+  --text-0:#eef2f8;
+  --text-1:#a7b3c6;
+  --text-2:#6c7893;
+
+  --calor:#ff5a36;
+  --combustivel:#ffb020;
+  --oxigenio:#2fb6f0;
+  --reacao:#9b5cff;
+
+  --danger:#ff4444;
+  --ok:#33d17a;
+
+  --font-display:'Rajdhani',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, #101a2b 0%, transparent 60%),
+    linear-gradient(180deg,var(--bg-0),#05070b);
+  color:var(--text-0);
+  font-family:var(--font-body);
+  min-height:100vh;
+  padding:28px 20px 40px;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* subtle industrial grid backdrop */
+body::before{
+  content:"";
+  position:fixed; inset:0;
+  background-image:
+    linear-gradient(var(--line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+  background-size:42px 42px;
+  opacity:.25;
+  pointer-events:none;
+  z-index:0;
+}
+
+.wrap{
+  position:relative;
+  z-index:1;
+  max-width:1180px;
+  margin:0 auto;
+}
+
+/* ---------- HEADER ---------- */
+header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  border-bottom:1px solid var(--line);
+  padding-bottom:16px;
+  margin-bottom:22px;
+}
+.title-block .eyebrow{
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.18em;
+  color:var(--text-2);
+  text-transform:uppercase;
+}
+.title-block h1{
+  font-family:var(--font-display);
+  font-weight:700;
+  font-size:clamp(26px,4vw,38px);
+  letter-spacing:.01em;
+  margin:4px 0 2px;
+  color:#fff;
+}
+.title-block p{
+  margin:0;
+  color:var(--text-1);
+  font-size:14px;
+}
+.status-pill{
+  font-family:var(--font-mono);
+  font-size:13px;
+  letter-spacing:.03em;
+  padding:9px 16px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--bg-2);
+  color:var(--text-1);
+  white-space:nowrap;
+  transition:border-color .4s ease, color .4s ease, box-shadow .4s ease;
+}
+.status-pill.sustained{ color:#ffd8a8; border-color:var(--calor); box-shadow:0 0 18px -6px var(--calor); }
+.status-pill.unstable{ color:#ffe4a3; border-color:var(--combustivel); box-shadow:0 0 16px -8px var(--combustivel); }
+.status-pill.critical{ color:#ffb3a8; border-color:var(--danger); box-shadow:0 0 16px -8px var(--danger); }
+.status-pill.impossible{ color:#ff9d9d; border-color:var(--danger); }
+.status-pill.extinct{ color:var(--text-2); border-color:var(--line); }
+
+/* ---------- MAIN LAYOUT ---------- */
+.stage{
+  display:grid;
+  grid-template-columns:1.3fr 1fr;
+  gap:22px;
+  align-items:stretch;
+}
+@media (max-width:900px){
+  .stage{ grid-template-columns:1fr; }
+}
+
+.panel{
+  background:linear-gradient(180deg,var(--bg-1),var(--bg-0));
+  border:1px solid var(--line);
+  border-radius:14px;
+  position:relative;
+  overflow:hidden;
+}
+.panel-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:14px 18px;
+  border-bottom:1px solid var(--line-soft);
+  font-family:var(--font-mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--text-2);
+}
+.panel-header .dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--ok);
+  box-shadow:0 0 8px var(--ok);
+}
+
+/* ---------- 3D TETRAHEDRON + FLAME ---------- */
+.tetra-panel{ min-height:460px; display:flex; flex-direction:column; }
+.tetra-viewport{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px 10px 6px;
+  position:relative;
+}
+.tetra-scene{
+  position:relative;
+  width:260px;
+  height:270px;
+  perspective:1000px;
+}
+.tetra{
+  position:absolute;
+  top:118px;
+  left:130px;
+  width:0;
+  height:0;
+  transform-style:preserve-3d;
+  animation:spin 22s linear infinite;
+  transform:rotateX(14deg) rotateY(0deg);
+}
+@keyframes spin{
+  from{ transform:rotateX(14deg) rotateY(0deg); }
+  to{ transform:rotateX(14deg) rotateY(360deg); }
+}
+.face{
+  position:absolute;
+  top:0; left:-98px;
+  width:0; height:0;
+  border-left:98px solid transparent;
+  border-right:98px solid transparent;
+  border-bottom:168px solid var(--fc, #232d40);
+  transform-origin:50% 0%;
+  opacity:.88;
+  filter:drop-shadow(0 0 14px var(--fg, transparent));
+  transition:border-bottom-color .7s ease, filter .7s ease, opacity .7s ease;
+}
+.face1{ transform:rotateY(0deg)   rotateX(-58deg); }
+.face2{ transform:rotateY(120deg) rotateX(-58deg); }
+.face3{ transform:rotateY(240deg) rotateX(-58deg); }
+
+/* apex energy core = REAÇÃO EM CADEIA (flat, always facing camera) */
+.apex-core{
+  position:absolute;
+  top:118px; left:130px;
+  width:30px; height:30px;
+  margin:-15px 0 0 -15px;
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px;
+  background:radial-gradient(circle,#2c3348,#1a2030);
+  border:1px solid var(--line);
+  color:var(--text-2);
+  z-index:4;
+  transition:all .6s ease;
+}
+.apex-core.active{
+  background:radial-gradient(circle, #fff 0%, var(--reacao) 55%, transparent 75%);
+  border-color:var(--reacao);
+  color:#fff;
+  box-shadow:0 0 22px 4px var(--reacao);
+  animation:pulseCore 1.6s ease-in-out infinite;
+}
+@keyframes pulseCore{
+  0%,100%{ transform:scale(1); }
+  50%{ transform:scale(1.18); }
+}
+
+/* ---------- FLAME (lightweight, CSS-only) ---------- */
+.flame-wrapper{
+  position:absolute;
+  left:130px; top:112px;
+  transform:translate(-50%,-100%) scale(var(--intensity,1));
+  transform-origin:50% 100%;
+  width:120px; height:190px;
+  opacity:var(--intensity,1);
+  transition:transform .9s cubic-bezier(.22,.9,.3,1), opacity .9s ease;
+  z-index:3;
+  pointer-events:none;
+}
+.flame-outer,.flame-inner,.flame-core{
+  position:absolute;
+  bottom:0; left:50%;
+  border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;
+  filter:blur(2px);
+}
+.flame-outer{
+  width:96px; height:180px;
+  margin-left:-48px;
+  background:radial-gradient(circle at 50% 75%, #ff8a1f 0%, #ff5a1a 45%, #c22a10 78%, transparent 100%);
+  opacity:.85;
+  animation:flicker1 2.6s ease-in-out infinite;
+}
+.flame-inner{
+  width:62px; height:130px;
+  margin-left:-31px;
+  bottom:2px;
+  background:radial-gradient(circle at 50% 80%, #ffe38a 0%, #ffb020 50%, #ff6a1a 85%, transparent 100%);
+  opacity:.92;
+  animation:flicker2 1.9s ease-in-out infinite;
+}
+.flame-core{
+  width:30px; height:66px;
+  margin-left:-15px;
+  bottom:4px;
+  background:radial-gradient(circle at 50% 85%, #ffffff 0%, #fff3b0 45%, #ffb020 100%);
+  filter:blur(1px);
+  animation:flicker3 1.3s ease-in-out infinite;
+}
+@keyframes flicker1{
+  0%,100%{ transform:scaleY(1) scaleX(1) skewX(0deg); }
+  30%{ transform:scaleY(1.04) scaleX(.97) skewX(-2deg); }
+  60%{ transform:scaleY(.96) scaleX(1.03) skewX(2deg); }
+}
+@keyframes flicker2{
+  0%,100%{ transform:scaleY(1) skewX(0deg); }
+  40%{ transform:scaleY(1.07) skewX(1.5deg); }
+  75%{ transform:scaleY(.94) skewX(-1.5deg); }
+}
+@keyframes flicker3{
+  0%,100%{ transform:scaleY(1) translateX(0); }
+  50%{ transform:scaleY(1.1) translateX(1px); }
+}
+
+/* small rising particles — fixed count, cheap CSS-only animation */
+.flame-particles span{
+  position:absolute;
+  bottom:30px; left:50%;
+  width:4px; height:4px;
+  border-radius:50%;
+  background:#ffb84d;
+  opacity:0;
+  animation:riseFade 2.4s linear infinite;
+}
+@keyframes riseFade{
+  0%{ opacity:0; transform:translate(0,0) scale(1); }
+  15%{ opacity:.9; }
+  100%{ opacity:0; transform:translate(var(--dx,6px),-140px) scale(.3); }
+}
+.flame-wrapper.extinguished{ opacity:0; transform:translate(-50%,-100%) scale(.05); }
+
+@media (prefers-reduced-motion: reduce){
+  .tetra{ animation:none; }
+  .flame-outer,.flame-inner,.flame-core,.apex-core.active,.flame-particles span{ animation:none; }
+}
+
+/* ---------- didactic caption under the pyramid ---------- */
+.equation{
+  text-align:center;
+  font-family:var(--font-mono);
+  font-size:12px;
+  color:var(--text-2);
+  padding:10px 16px 18px;
+  letter-spacing:.02em;
+}
+.equation b{ color:var(--text-1); font-weight:500; }
+
+/* ---------- SIDE PANEL: elements + combustion ---------- */
+.side-panel{ display:flex; flex-direction:column; }
+.elements-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:16px;
+}
+.el-card{
+  display:grid;
+  grid-template-columns:40px 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--bg-2);
+  cursor:pointer;
+  text-align:left;
+  color:inherit;
+  font-family:inherit;
+  transition:border-color .35s ease, background .35s ease, box-shadow .35s ease;
+}
+.el-card:hover{ border-color:var(--line); background:#1a2233; }
+.el-card:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
+.el-icon{
+  width:40px; height:40px;
+  border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px;
+  background:var(--bg-1);
+  border:1px solid var(--line);
+  transition:all .35s ease;
+}
+.el-name{ font-family:var(--font-display); font-weight:600; font-size:15px; letter-spacing:.01em; }
+.el-desc{ display:block; font-size:11.5px; color:var(--text-2); margin-top:2px; font-weight:400; font-family:var(--font-body); }
+.el-state{
+  font-family:var(--font-mono);
+  font-size:10.5px;
+  letter-spacing:.08em;
+  padding:5px 9px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  color:var(--text-2);
+  white-space:nowrap;
+}
+.el-card.active .el-state{ color:#0c0f14; font-weight:600; }
+
+.el-card[data-el="calor"].active{ border-color:var(--calor); box-shadow:0 0 0 1px var(--calor) inset; }
+.el-card[data-el="calor"].active .el-icon{ background:var(--calor); box-shadow:0 0 14px -2px var(--calor); }
+.el-card[data-el="calor"].active .el-state{ background:var(--calor); border-color:var(--calor); }
+
+.el-card[data-el="combustivel"].active{ border-color:var(--combustivel); box-shadow:0 0 0 1px var(--combustivel) inset; }
+.el-card[data-el="combustivel"].active .el-icon{ background:var(--combustivel); box-shadow:0 0 14px -2px var(--combustivel); }
+.el-card[data-el="combustivel"].active .el-state{ background:var(--combustivel); border-color:var(--combustivel); }
+
+.el-card[data-el="oxigenio"].active{ border-color:var(--oxigenio); box-shadow:0 0 0 1px var(--oxigenio) inset; }
+.el-card[data-el="oxigenio"].active .el-icon{ background:var(--oxigenio); box-shadow:0 0 14px -2px var(--oxigenio); }
+.el-card[data-el="oxigenio"].active .el-state{ background:var(--oxigenio); border-color:var(--oxigenio); }
+
+.el-card[data-el="reacao"].active{ border-color:var(--reacao); box-shadow:0 0 0 1px var(--reacao) inset; }
+.el-card[data-el="reacao"].active .el-icon{ background:var(--reacao); box-shadow:0 0 14px -2px var(--reacao); }
+.el-card[data-el="reacao"].active .el-state{ background:var(--reacao); border-color:var(--reacao); }
+
+/* message strip */
+.message-box{
+  margin:0 16px 16px;
+  padding:12px 14px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:var(--bg-1);
+  font-size:13px;
+  color:var(--text-1);
+  min-height:20px;
+  line-height:1.45;
+  transition:border-color .4s ease;
+}
+.message-box.warn{ border-color:var(--danger); color:#ffc3bd; }
+.message-box.calm{ border-color:var(--ok); color:#c9f5dd; }
+
+/* ---------- CONTROLS ---------- */
+.controls{
+  margin-top:20px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.btn{
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  letter-spacing:.04em;
+  padding:11px 18px;
+  border-radius:9px;
+  border:1px solid var(--line);
+  background:var(--bg-2);
+  color:var(--text-0);
+  cursor:pointer;
+  transition:border-color .25s ease, transform .15s ease, background .25s ease;
+}
+.btn:hover{ border-color:#3a4763; background:#1a2233; }
+.btn:active{ transform:scale(.97); }
+.btn:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
+.btn.primary{ border-color:var(--calor); color:#ffd8a8; }
+.btn.primary:hover{ box-shadow:0 0 16px -6px var(--calor); }
+.btn[disabled]{ opacity:.4; cursor:not-allowed; }
+
+.demo-flag{
+  margin-left:auto;
+  font-family:var(--font-mono);
+  font-size:11px;
+  color:var(--text-2);
+  letter-spacing:.06em;
+}
+.demo-flag.on{ color:#ffd8a8; }
+
+/* ---------- EXPLANATION FOOTER ---------- */
+.explain-panel{
+  margin-top:20px;
+  padding:18px 20px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:linear-gradient(180deg,var(--bg-1),var(--bg-0));
+}
+.explain-panel h2{
+  font-family:var(--font-display);
+  font-size:14px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--text-2);
+  margin:0 0 8px;
+}
+.explain-panel p{
+  margin:0;
+  color:var(--text-1);
+  font-size:14.5px;
+  line-height:1.6;
+  max-width:78ch;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <div class="eyebrow">Segurança de Processos · Prevenção de Incêndios</div>
+      <h1>Tetraedro do Fogo</h1>
+      <p>Os quatro elementos da combustão e o efeito da remoção de cada um deles.</p>
+    </div>
+    <div id="statusPill" class="status-pill sustained">🔥 COMBUSTÃO SUSTENTADA</div>
+  </header>
+
+  <div class="stage">
+
+    <!-- ================= TETRAEDRO + FOGO ================= -->
+    <section class="panel tetra-panel">
+      <div class="panel-header">
+        <span>Modelo 3D — Tetraedro do Fogo</span>
+        <span class="dot" id="liveDot"></span>
+      </div>
+
+      <div class="tetra-viewport">
+        <div class="tetra-scene">
+          <div class="tetra" id="tetra">
+            <div class="face face1" id="face-calor"></div>
+            <div class="face face2" id="face-combustivel"></div>
+            <div class="face face3" id="face-oxigenio"></div>
+          </div>
+          <div class="apex-core" id="apexCore">⚡</div>
+          <div class="flame-wrapper" id="flameWrapper" style="--intensity:1">
+            <div class="flame-particles" id="flameParticles"></div>
+            <div class="flame-outer"></div>
+            <div class="flame-inner"></div>
+            <div class="flame-core"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="equation">
+        <b>CALOR</b> + <b>COMBUSTÍVEL</b> + <b>OXIGÊNIO</b> + <b>REAÇÃO EM CADEIA</b> = FOGO
+      </div>
+    </section>
+
+    <!-- ================= PAINEL LATERAL ================= -->
+    <section class="panel side-panel">
+      <div class="panel-header">
+        <span>Elementos da Combustão</span>
+        <span style="color:var(--text-2)">clique para alternar</span>
+      </div>
+
+      <div class="elements-list" id="elementsList">
+        <button class="el-card active" data-el="calor">
+          <span class="el-icon">🔥</span>
+          <span>
+            <span class="el-name">Calor</span>
+            <span class="el-desc">Energia térmica necessária para iniciar e manter a reação.</span>
+          </span>
+          <span class="el-state">ATIVO</span>
+        </button>
+
+        <button class="el-card active" data-el="combustivel">
+          <span class="el-icon">⛽</span>
+          <span>
+            <span class="el-name">Combustível</span>
+            <span class="el-desc">Material capaz de reagir e sustentar a combustão.</span>
+          </span>
+          <span class="el-state">ATIVO</span>
+        </button>
+
+        <button class="el-card active" data-el="oxigenio">
+          <span class="el-icon">🌬️</span>
+          <span>
+            <span class="el-name">Oxigênio</span>
+            <span class="el-desc">Comburente que alimenta a oxidação do combustível.</span>
+          </span>
+          <span class="el-state">ATIVO</span>
+        </button>
+
+        <button class="el-card active" data-el="reacao">
+          <span class="el-icon">⚡</span>
+          <span>
+            <span class="el-name">Reação em Cadeia</span>
+            <span class="el-desc">Processo autossustentado que perpetua a combustão.</span>
+          </span>
+          <span class="el-state">ATIVO</span>
+        </button>
+      </div>
+
+      <div class="message-box calm" id="messageBox">
+        Todos os quatro elementos estão presentes. A combustão se sustenta.
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= CONTROLES ================= -->
+  <div class="controls">
+    <button class="btn primary" id="btnStart">▶ INICIAR DEMO</button>
+    <button class="btn" id="btnPause" disabled>⏸ PAUSAR DEMO</button>
+    <button class="btn" id="btnReset">🔄 REINICIAR</button>
+    <span class="demo-flag" id="demoFlag">DEMO: PARADA</span>
+  </div>
+
+  <!-- ================= EXPLICAÇÃO DIDÁTICA ================= -->
+  <div class="explain-panel">
+    <h2>Conceito</h2>
+    <p>O fogo necessita da presença simultânea de quatro elementos para existir e se manter: calor, combustível,
+      oxigênio e a reação em cadeia que perpetua o processo. A remoção de qualquer um deles interrompe a combustão —
+      esse é o princípio por trás de todos os métodos de extinção de incêndio (resfriamento, abafamento, retirada do
+      material ou interrupção da reação química.)</p>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------------------------------------------------
+     ESTADO
+  --------------------------------------------------------- */
+  var LABELS = {
+    calor:       "Calor",
+    combustivel: "Combustível",
+    oxigenio:    "Oxigênio",
+    reacao:      "Reação em Cadeia"
+  };
+
+  var OFF_MESSAGES = {
+    calor:       "Sem energia térmica suficiente, a combustão não consegue se manter.",
+    combustivel: "Sem combustível, não existe material para sustentar a combustão.",
+    oxigenio:    "Sem oxigênio suficiente, a combustão é interrompida.",
+    reacao:      "Sem a reação em cadeia, o processo de combustão não se sustenta."
+  };
+
+  var state = { calor:true, combustivel:true, oxigenio:true, reacao:true };
+
+  var els = {
+    cards:      document.querySelectorAll(".el-card"),
+    flame:      document.getElementById("flameWrapper"),
+    apex:       document.getElementById("apexCore"),
+    statusPill: document.getElementById("statusPill"),
+    messageBox: document.getElementById("messageBox"),
+    btnStart:   document.getElementById("btnStart"),
+    btnPause:   document.getElementById("btnPause"),
+    btnReset:   document.getElementById("btnReset"),
+    demoFlag:   document.getElementById("demoFlag"),
+    faces: {
+      calor:       document.getElementById("face-calor"),
+      combustivel: document.getElementById("face-combustivel"),
+      oxigenio:    document.getElementById("face-oxigenio")
+    },
+    particles: document.getElementById("flameParticles")
+  };
+
+  var FACE_COLOR = {
+    calor:"#ff5a36", combustivel:"#ffb020", oxigenio:"#2fb6f0", reacao:"#9b5cff"
+  };
+
+  /* build a handful of lightweight rising particles once (CSS handles animation) */
+  (function buildParticles(){
+    var n = 8;
+    for(var i=0;i<n;i++){
+      var s = document.createElement("span");
+      var dx = (Math.random()*26-13).toFixed(1) + "px";
+      s.style.setProperty("--dx", dx);
+      s.style.left = (44 + Math.random()*32) + "%";
+      s.style.animationDelay = (Math.random()*2.4).toFixed(2) + "s";
+      s.style.animationDuration = (2 + Math.random()*1.2).toFixed(2) + "s";
+      els.particles.appendChild(s);
+    }
+  })();
+
+  /* ---------------------------------------------------------
+     RENDER
+  --------------------------------------------------------- */
+  function activeCount(){
+    return Object.keys(state).filter(function(k){ return state[k]; }).length;
+  }
+
+  function render(){
+    var count = activeCount();
+    var intensity = count / 4; // 0..1, drives flame scale/opacity
+
+    // cards
+    els.cards.forEach(function(card){
+      var key = card.getAttribute("data-el");
+      var on = state[key];
+      card.classList.toggle("active", on);
+      card.querySelector(".el-state").textContent = on ? "ATIVO" : "INATIVO";
+    });
+
+    // pyramid faces
+    ["calor","combustivel","oxigenio"].forEach(function(key){
+      var face = els.faces[key];
+      if(state[key]){
+        face.style.setProperty("--fc", FACE_COLOR[key]);
+        face.style.setProperty("--fg", FACE_COLOR[key]);
+        face.style.opacity = "0.9";
+      } else {
+        face.style.setProperty("--fc", "#232d40");
+        face.style.setProperty("--fg", "transparent");
+        face.style.opacity = "0.55";
+      }
+    });
+
+    // apex core (reação em cadeia)
+    els.apex.classList.toggle("active", state.reacao);
+
+    // flame
+    if(count === 0){
+      els.flame.classList.add("extinguished");
+    } else {
+      els.flame.classList.remove("extinguished");
+      els.flame.style.setProperty("--intensity", Math.max(intensity, 0.18));
+    }
+
+    // status pill + combustion indicator
+    var pillText, pillClass;
+    switch(count){
+      case 4: pillText="🔥 COMBUSTÃO SUSTENTADA";  pillClass="sustained";   break;
+      case 3: pillText="🔥 COMBUSTÃO INSTÁVEL";    pillClass="unstable";   break;
+      case 2: pillText="⚠️ COMBUSTÃO CRÍTICA";     pillClass="critical";   break;
+      case 1: pillText="⚠️ COMBUSTÃO IMPOSSÍVEL";  pillClass="impossible"; break;
+      default: pillText="❌ FOGO EXTINTO";          pillClass="extinct";
+    }
+    els.statusPill.textContent = pillText;
+    els.statusPill.className = "status-pill " + pillClass;
+  }
+
+  function setMessage(text, tone){
+    els.messageBox.textContent = text;
+    els.messageBox.className = "message-box" + (tone ? " " + tone : "");
+  }
+
+  function updateMessageForState(){
+    var count = activeCount();
+    if(count === 4){
+      setMessage("Todos os quatro elementos estão presentes. A combustão se sustenta.", "calm");
+    } else if(count === 0){
+      setMessage("Nenhum elemento presente. Sem os quatro elementos simultaneamente, o fogo não existe.", "warn");
+    } else {
+      // report the most recently deactivated element found, else generic
+      var missing = Object.keys(state).filter(function(k){ return !state[k]; });
+      var last = missing[missing.length-1];
+      setMessage(OFF_MESSAGES[last], "warn");
+    }
+  }
+
+  function toggleElement(key){
+    state[key] = !state[key];
+    render();
+    updateMessageForState();
+  }
+
+  els.cards.forEach(function(card){
+    card.addEventListener("click", function(){
+      stopDemo();               // manual interaction takes control
+      toggleElement(card.getAttribute("data-el"));
+    });
+  });
+
+  /* ---------------------------------------------------------
+     DEMO AUTOMÁTICO
+  --------------------------------------------------------- */
+  var DEMO_ACTIVATE_ORDER   = ["calor","combustivel","oxigenio","reacao"];
+  var DEMO_DEACTIVATE_ORDER = ["oxigenio","calor","combustivel","reacao"];
+
+  function buildDemoSteps(){
+    var steps = [];
+    var s = { calor:false, combustivel:false, oxigenio:false, reacao:false };
+
+    steps.push({ state:copy(s), message:"Sistema pronto. Iniciando demonstração do Tetraedro do Fogo.", tone:null, delay:1800 });
+
+    DEMO_ACTIVATE_ORDER.forEach(function(key){
+      s[key] = true;
+      steps.push({ state:copy(s), message: LABELS[key] + " ativado.", tone:"calm", delay:1500 });
+    });
+
+    steps.push({ state:copy(s), message:"Os quatro elementos estão presentes simultaneamente: a combustão se sustenta.", tone:"calm", delay:2600 });
+
+    DEMO_DEACTIVATE_ORDER.forEach(function(key){
+      s[key] = false;
+      steps.push({ state:copy(s), message: OFF_MESSAGES[key], tone:"warn", delay:1900 });
+    });
+
+    steps.push({ state:copy(s), message:"Fogo extinto. A remoção de qualquer elemento interrompe a combustão.", tone:"warn", delay:2800 });
+
+    return steps;
+  }
+
+  function copy(o){ var r={}; for(var k in o){ r[k]=o[k]; } return r; }
+
+  var demoSteps = buildDemoSteps();
+  var demoIndex = 0;
+  var demoTimer = null;
+  var demoRunning = false;
+
+  function applyDemoStep(step){
+    state = copy(step.state);
+    render();
+    setMessage(step.message, step.tone);
+  }
+
+  function scheduleNext(){
+    if(!demoRunning) return;
+    var step = demoSteps[demoIndex];
+    demoTimer = setTimeout(function(){
+      demoIndex = (demoIndex + 1) % demoSteps.length;
+      applyDemoStep(demoSteps[demoIndex]);
+      scheduleNext();
+    }, step.delay);
+  }
+
+  function startDemo(){
+    if(demoRunning) return;
+    demoRunning = true;
+    els.btnStart.disabled = true;
+    els.btnPause.disabled = false;
+    els.demoFlag.textContent = "DEMO: EM EXECUÇÃO";
+    els.demoFlag.classList.add("on");
+    applyDemoStep(demoSteps[demoIndex]);
+    scheduleNext();
+  }
+
+  function stopDemo(){
+    demoRunning = false;
+    if(demoTimer){ clearTimeout(demoTimer); demoTimer = null; }
+    els.btnStart.disabled = false;
+    els.btnPause.disabled = true;
+    els.demoFlag.textContent = "DEMO: PARADA";
+    els.demoFlag.classList.remove("on");
+  }
+
+  function resetAll(){
+    stopDemo();
+    demoIndex = 0;
+    state = { calor:true, combustivel:true, oxigenio:true, reacao:true };
+    render();
+    setMessage("Todos os quatro elementos estão presentes. A combustão se sustenta.", "calm");
+  }
+
+  els.btnStart.addEventListener("click", startDemo);
+  els.btnPause.addEventListener("click", stopDemo);
+  els.btnReset.addEventListener("click", resetAll);
+
+  /* ---------------------------------------------------------
+     INIT
+  --------------------------------------------------------- */
+  render();
+})();
+</script>
+</body>
+</html>
